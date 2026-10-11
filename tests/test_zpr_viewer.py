@@ -156,6 +156,17 @@ def test_実アドオン出力のUV平面にテクスチャが貼れる():
     assert r["glError"] == 0, r
 
 
+def test_はてなキーでキー一覧が出て閉じる():
+    r = open_sample("cube_color.zpr", mode=0, case="help")
+    h = r["help"]
+    assert h["shown"], f"? キーで一覧が出ない {r}"
+    assert h["rows"] >= 10, f"一覧の内容が足りない {h}"
+    # 読み込み画面の下に出す表と、? の一覧は同じ内容でなければならない
+    assert h["dropRows"] == h["rows"], f"ドロップ画面と ? 一覧の表が違う {h}"
+    assert h["closedByEsc"], f"Esc で閉じられない {h}"
+    assert h["openAgain"] and h["closedByQuestion"], f"? で開け閉めできない {h}"
+
+
 def test_テクスチャはクリックで拡大表示になる():
     r = open_sample("plane_uv.zpr", mode=1, case="lightbox")
     lb = r["lightbox"]

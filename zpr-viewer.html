@@ -115,10 +115,31 @@
     text-shadow: 0 1px 3px #000; display: none;
   }
   #tips.show { display: block; }
-  #tips kbd {
+  #tips kbd, #shorthelp kbd {
     font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: var(--text);
     border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35);
   }
+
+  /* ? キーで出すキー一覧。ドロップ画面の表と同じ内容を見せる */
+  #shorthelp {
+    position: fixed; inset: 0; z-index: 55; display: none;
+    background: rgba(8, 9, 13, 0.82); align-items: center; justify-content: center;
+  }
+  #shorthelp.show { display: flex; }
+  #shorthelp .box {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; max-width: min(92vw, 460px);
+  }
+  #shorthelp h2 {
+    font-size: 11px; letter-spacing: 0.14em; color: var(--muted);
+    margin: 0 0 8px; font-weight: 600;
+  }
+  #shorthelp table, #drop table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  #shorthelp td, #drop td {
+    padding: 3px 6px; border-top: 1px solid var(--line); vertical-align: top; text-align: left;
+  }
+  #shorthelp td.k, #drop td.k { white-space: nowrap; width: 1%; color: var(--text); }
+  #shorthelp .foot { color: var(--muted); font-size: 11px; margin-top: 10px; }
   #toast {
     position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 40;
     padding: 9px 18px; border-radius: 8px; background: rgba(30, 22, 22, 0.94);
@@ -149,7 +170,8 @@
   <div class="lead">ファイルをここにドラッグ＆ドロップ</div>
   <div class="sub">ZPrint / ZEdit プロジェクトファイル（頂点・三角形・頂点色・JPEG テクスチャ）<br>すべてローカルで処理します。アップロードはしません。</div>
   <button id="pick">ファイルを選ぶ</button>
-  <div class="hint">キー 1〜5 で表示モード ／ W でワイヤー ／ G で方眼 ／ R で視点リセット ／ P で PNG 保存</div>
+  <table id="drophints"></table>
+  <div class="hint"><kbd>?</kbd> でキー一覧 ／ すべてローカルで処理します</div>
   <input type="file" id="file" accept=".zpr,application/octet-stream" hidden>
 </div>
 
@@ -197,6 +219,14 @@
 </div>
 <div id="toast"></div>
 <div id="busy"><div class="ring"></div><div class="msg" id="busymsg">読み込み中…</div></div>
+
+<div id="shorthelp">
+  <div class="box">
+    <h2>KEYS</h2>
+    <table id="helpkeys"></table>
+    <div class="foot"><kbd>?</kbd> または <kbd>Esc</kbd> で閉じる ／ 背景クリックでも可</div>
+  </div>
+</div>
 
 <div id="lightbox">
   <div id="lbbox">
@@ -1032,6 +1062,40 @@ function setMode(mode) {
 }
 
 /* ------------------------------------------------------------------
+   キー一覧（ドロップ画面と ? オーバーレイで同じ表を使い回す）
+   ------------------------------------------------------------------ */
+
+const SHORTCUTS = [
+  ["1", "色表示"],
+  ["2", "テクスチャ"],
+  ["3", "ワイヤーのみ"],
+  ["4", "フラット（照明なし）"],
+  ["5", "UV"],
+  ["W", "ワイヤーの重ね表示"],
+  ["G", "方眼グリッド"],
+  ["C", "裏面カリング"],
+  ["drag", "回転"],
+  ["shift+drag", "移動（パン）"],
+  ["右drag", "移動（パン）"],
+  ["wheel", "ズーム"],
+  ["pinch", "ズーム"],
+  ["dblclick", "視点リセット"],
+  ["R", "視点リセット"],
+  ["P", "PNG 保存"],
+  ["?", "この一覧"],
+  ["Esc", "閉じる"],
+];
+
+const kbds = s => s.split(" ").map(k => `<kbd>${escapeHTML(k)}</kbd>`).join(" ");
+const renderKeys = el => {
+  el.innerHTML = SHORTCUTS.map(([k, d]) => `<tr><td class="k">${kbds(k)}</td><td>${escapeHTML(d)}</td></tr>`).join("");
+};
+
+const helpOpen = () => $("#shorthelp").classList.contains("show");
+const closeHelp = () => $("#shorthelp").classList.remove("show");
+const toggleHelp = () => $("#shorthelp").classList.toggle("show", !helpOpen());
+
+/* ------------------------------------------------------------------
    テクスチャの拡大表示
    ------------------------------------------------------------------ */
 
@@ -1103,6 +1167,9 @@ function installUI() {
   });
 
   $("#lbclose").onclick = closeLightbox;
+  renderKeys($("#drophints"));
+  renderKeys($("#helpkeys"));
+  $("#shorthelp").onclick = e => { if (e.target.id === "shorthelp") closeHelp(); };
   // 画像そのものをクリックした時は閉じない（拡大して見ている最中なので）
   $("#lightbox").onclick = e => { if (e.target.id === "lightbox") closeLightbox(); };
 
@@ -1119,6 +1186,13 @@ function installUI() {
   canvas.addEventListener("click", () => { if (!viewer) drop.classList.remove("hidden"); });
 
   window.addEventListener("keydown", e => {
+    // 一覧はモデルを読み込んでいなくても出したい（ドロップ画面で ? を押す）
+    if (e.key === "?") { toggleHelp(); e.preventDefault(); return; }
+    if (helpOpen()) {
+      if (e.key === "Escape") closeHelp();
+      e.preventDefault();
+      return;
+    }
     // 拡大表示中は何より先にこれをさばく（1 や P が裏で走るとややこしい）
     if (lbOpen()) {
       if (e.key === "Escape") closeLightbox();

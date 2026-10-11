@@ -10,6 +10,7 @@
    &case=wire          : 方眼を消してワイヤー線のピクセル数を数える
    &wire=0             : (case=wire) ワイヤー重ねをオフにしてから測る
    &case=buffers       : 頂点バッファ規模と索引の最大値、単独 draw のエラー码を読む
+   &case=help          : ? キーでキー一覧が出て閉じられるか
    &case=lightbox      : テクスチャの拡大表示が開くか、閉じられるか
    &case=pan           : pan() の移動方向をカメラ軸で検証する
    &case=reset         : 視点リセット後のカメラ距離を読む
@@ -292,6 +293,22 @@
       if (ths.length > 1) { stepLightbox(1); res.lightbox.steps = lbIndex; }
       closeLightbox();
       res.lightbox.closed = !document.getElementById('lightbox').classList.contains('show');
+    }
+
+    // --- ? キーのショートカット一覧 ---
+    if (q.get('case') === 'help') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+      res.help = {
+        shown: document.getElementById('shorthelp').classList.contains('show'),
+        rows: document.querySelectorAll('#helpkeys tr').length,
+        dropRows: document.querySelectorAll('#drophints tr').length,
+      };
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      res.help.closedByEsc = !document.getElementById('shorthelp').classList.contains('show');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+      res.help.openAgain = document.getElementById('shorthelp').classList.contains('show');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+      res.help.closedByQuestion = !document.getElementById('shorthelp').classList.contains('show');
     }
 
     report(res);
