@@ -1,0 +1,11 @@
+# 別管理の Blender エクスポートアドオン（ビューア側には含めない）
+/blender-addon-export-zpr/
+
+# テスト実行時に作り直す生成物
+/zpr-viewer.test.html
+/tests/samples/name_*.zpr
+
+# macOS / Python
+.DS_Store
+__pycache__/
+*.py[cod]

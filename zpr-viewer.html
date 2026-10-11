@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ZPR VIEWER</title>
+<style>
+  :root {
+    --bg: #14151c;
+    --panel: rgba(24, 26, 34, 0.86);
+    --line: rgba(255, 255, 255, 0.10);
+    --text: #dfe2ea;
+    --muted: #8d93a5;
+    --accent: #9d7bff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+    font-size: 13px;
+    -webkit-user-select: none; user-select: none;
+  }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  #drop {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    text-align: center; padding: 24px; z-index: 30;
+    background: radial-gradient(circle at 50% 40%, #22243a 0%, #14151c 70%);
+  }
+  #drop.hidden { display: none; }
+  #drop.armed { background: radial-gradient(circle at 50% 40%, #3a2f6a 0%, #14151c 70%); }
+  #drop .mark {
+    font-size: 46px; letter-spacing: 0.18em; color: var(--accent);
+    text-shadow: 0 0 24px rgba(157, 123, 255, 0.5);
+  }
+  #drop .lead { font-size: 17px; letter-spacing: 0.06em; }
+  #drop .sub { color: var(--muted); line-height: 1.9; }
+  #drop button {
+    margin-top: 4px; padding: 10px 26px; font-size: 14px; cursor: pointer;
+    color: var(--text); background: #2b2d3d; border: 1px solid var(--line); border-radius: 8px;
+  }
+  #drop button:hover { background: #363950; }
+  #drop .hint { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
+
+  #panel {
+    position: fixed; top: 12px; left: 12px; width: 268px; z-index: 20;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+    display: none; overflow: hidden;
+  }
+  #panel.show { display: block; }
+  #panel h1 {
+    margin: 0; padding: 9px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.16em;
+    color: var(--accent); border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+  }
+  #panel h1 .fold { color: var(--muted); font-size: 11px; letter-spacing: 0; }
+  #panel .body { padding: 10px 12px 12px; }
+  #panel.collapsed .body { display: none; }
+
+  .fname { font-size: 13px; word-break: break-all; line-height: 1.5; margin-bottom: 6px; }
+  .kv { display: grid; grid-template-columns: 62px 1fr; gap: 2px 8px; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+  .kv b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .sec { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .sec:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .sectitle { font-size: 10.5px; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 7px; }
+
+  .row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .btn {
+    flex: 1 1 auto; min-width: 46px; padding: 6px 4px; text-align: center; cursor: pointer;
+    font-size: 11.5px; color: var(--text); background: #23252f;
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .btn:hover { background: #2e3140; }
+  .btn.on { background: var(--accent); color: #171426; border-color: var(--accent); font-weight: 600; }
+  .btn.swatch { min-width: 30px; flex: 0 0 auto; width: 30px; height: 24px; padding: 0; }
+  .btn.swatch.on { box-shadow: 0 0 0 2px var(--accent); }
+
+  #thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+  #thumbs .th { cursor: pointer; }
+  #thumbs img {
+    width: 52px; height: 52px; object-fit: cover; display: block;
+    border: 1px solid var(--line); border-radius: 5px; background: #000;
+  }
+  #thumbs .th:hover img { border-color: var(--accent); }
+  #texname { color: var(--muted); font-size: 10.5px; margin-top: 6px; word-break: break-all; min-height: 13px; }
+
+  #chunks { color: var(--muted); font-size: 11px; line-height: 1.7; font-family: ui-monospace, Menlo, monospace; }
+  #chunks span { color: var(--text); }
+
+  #tips {
+    position: fixed; left: 12px; bottom: 10px; z-index: 15;
+    color: var(--muted); font-size: 11px; letter-spacing: 0.03em; line-height: 1.7;
+    text-shadow: 0 1px 3px #000; display: none;
+  }
+  #tips.show { display: block; }
+  #tips kbd {
+    font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: var(--text);
+    border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35);
+  }
+  #toast {
+    position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 40;
+    padding: 9px 18px; border-radius: 8px; background: rgba(30, 22, 22, 0.94);
+    border: 1px solid #6b3a3a; color: #ffd9d9; font-size: 12.5px; max-width: 80%;
+    display: none; line-height: 1.6;
+  }
+  #toast.show { display: block; }
+  #busy {
+    position: fixed; inset: 0; z-index: 35; display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    background: rgba(12, 13, 18, 0.72);
+  }
+  #busy.show { display: flex; }
+  #busy .ring {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 3px solid rgba(157, 123, 255, 0.25); border-top-color: var(--accent);
+    animation: spin 0.85s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #busy .msg { color: var(--text); font-size: 12.5px; letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="drop">
+  <div class="mark">.ZPR</div>
+  <div class="lead">ファイルをここにドラッグ＆ドロップ</div>
+  <div class="sub">ZPrint / ZEdit プロジェクトファイル（頂点・三角形・頂点色・JPEG テクスチャ）<br>すべてローカルで処理します。アップロードはしません。</div>
+  <button id="pick">ファイルを選ぶ</button>
+  <div class="hint">キー 1〜5 で表示モード ／ W でワイヤー ／ G で方眼 ／ R で視点リセット ／ P で PNG 保存</div>
+  <input type="file" id="file" accept=".zpr,application/octet-stream" hidden>
+</div>
+
+<div id="panel">
+  <h1 id="phead">ZPR VIEWER <span class="fold" id="fold">-</span></h1>
+  <div class="body">
+    <div class="sec">
+      <div class="fname" id="fname">-</div>
+      <div class="kv" id="meta"></div>
+    </div>
+    <div class="sec">
+      <div class="sectitle">DISPLAY</div>
+      <div class="row" id="modes">
+        <div class="btn" data-mode="0">色</div>
+        <div class="btn" data-mode="1">テクスチャ</div>
+        <div class="btn" data-mode="2">ワイヤーのみ</div>
+        <div class="btn" data-mode="3">フラット</div>
+        <div class="btn" data-mode="4">UV</div>
+      </div>
+      <div class="row" style="margin-top:5px">
+        <div class="btn" id="twire">ワイヤー</div>
+        <div class="btn" id="tgrid">グリッド</div>
+        <div class="btn" id="tcull">両面描画</div>
+        <div class="btn" id="tdump">チャンク</div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sectitle">BACKGROUND</div>
+      <div class="row" id="bgs"></div>
+    </div>
+    <div class="sec" id="texsec" style="display:none">
+      <div class="sectitle">TEXTURES <span id="texcount"></span></div>
+      <div id="thumbs"></div>
+      <div id="texname"></div>
+    </div>
+    <div class="sec" id="chunksec" style="display:none">
+      <div class="sectitle">CHUNKS</div>
+      <div id="chunks"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tips">
+  <kbd>drag</kbd> 回転 &nbsp; <kbd>shift+drag</kbd>/<kbd>右drag</kbd> 移動 &nbsp; <kbd>wheel</kbd> ズーム &nbsp; <kbd>dblclick</kbd> リセット
+</div>
+<div id="toast"></div>
+<div id="busy"><div class="ring"></div><div class="msg" id="busymsg">読み込み中…</div></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   ZPR VIEWER — 依存ゼロの単一ファイル .zpr ビューア
+
+   フォーマットは Blender アドオン io_export_zpr.py の解析メモに基づく。
+   公開仕様が無いので未知のタグは「読めても触らない」方針で無視する。
+   特に 0x3E（ZPrint が書く変換行列）は意味を確定できていないので適用しない。
+   ===================================================================== */
+
+const MAGIC = 0x03AA;
+const TAG_VERTICES = 0x0a;
+const TAG_TRIANGLES_V3 = 0x15;
+const TAG_TEXTURES = 0x1f;
+const TAG_TRIANGLE_UVS = 0x32;
+
+const REC_VERTEX = 19;          // f32 xyz, u8 rgb x3, i32 uv
+const REC_TRIANGLE = 25;        // u32 v x3, u8 rgb x9, i32 uv
+const REC_TRIANGLE_UV = 28;     // i32 tex, f32 u x3, f32 v x3
+
+function latin1(bytes, off, len) {
+  let s = "";
+  for (let i = 0; i < len; i++) s += String.fromCharCode(bytes[off + i]);
+  return s;
+}
+
+// テクスチャ名は ZPrint（Windows の ANSI アプリ）由来だと cp932、Blender 由来だと UTF-8。
+// UTF-8 として壊れないならそれを信用し、壊れるなら shift_jis、それもダメならバイトをそのまま並べる
+function decodeName(bytes, off, len) {
+  const sub = bytes.subarray(off, off + len);
+  const utf = new TextDecoder("utf-8", { fatal: false }).decode(sub);
+  if (!utf.includes("\uFFFD")) return utf;
+  try { return new TextDecoder("shift_jis", { fatal: true }).decode(sub); }
+  catch (e) { return latin1(bytes, off, len); }
+}
+
+function parseZpr(buffer, filename) {
+  const dv = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  if (buffer.byteLength < 12) throw new Error("ファイルが短すぎます");
+  if (dv.getUint16(0, true) !== MAGIC) {
+    throw new Error("マジックが 0x03AA ではありません。ZPR ではない可能性があります");
+  }
+
+  const nameLen = dv.getUint32(2, true);
+  if (6 + nameLen + 6 > buffer.byteLength) throw new Error("ヘッダが壊れています");
+  const creator = latin1(bytes, 6, nameLen);
+  let p = 6 + nameLen;
+  const version = dv.getUint8(p);
+  const textureMode = dv.getUint8(p + 1);
+  const headerTail = bytes.slice(p + 2, p + 6);
+  p += 6;
+
+  // 「u8 タグ + u32 チャンク長（この5バイトを含む）+ 本体」。
+  // 同じタグが複数出ても連結できるよう list にしておく
+  const lists = new Map();
+  while (p + 5 <= buffer.byteLength) {
+    const tag = dv.getUint8(p);
+    const len = dv.getUint32(p + 1, true);
+    if (len < 5 || p + len > buffer.byteLength) break;   // 変な長さならここで打ち切り
+    if (!lists.has(tag)) lists.set(tag, []);
+    lists.get(tag).push({ start: p + 5, end: p + len });
+    p += len;
+  }
+
+  const out = {
+    filename, size: buffer.byteLength, creator, version, textureMode, headerTail, lists,
+    positions: null, vertexCount: 0, vertexRGB: null,
+    triV: null, triRGB: null, triUV: null, triangleCount: 0,
+    uvTex: null, uvU: null, uvV: null, uvCount: 0, textures: [],
+  };
+
+  // --- 0x0A 頂点 ---
+  let nv = 0;
+  for (const c of lists.get(TAG_VERTICES) || []) nv += Math.floor((c.end - c.start) / REC_VERTEX);
+  if (nv > 0) {
+    const pos = new Float32Array(nv * 3), vrgb = new Uint8Array(nv * 3);
+    let w = 0;
+    for (const c of lists.get(TAG_VERTICES)) {
+      const n = Math.floor((c.end - c.start) / REC_VERTEX);
+      for (let i = 0; i < n; i++) {
+        const o = c.start + i * REC_VERTEX;
+        pos[w] = dv.getFloat32(o, true);
+        pos[w + 1] = dv.getFloat32(o + 4, true);
+        pos[w + 2] = dv.getFloat32(o + 8, true);
+        vrgb[w] = dv.getUint8(o + 12);
+        vrgb[w + 1] = dv.getUint8(o + 13);
+        vrgb[w + 2] = dv.getUint8(o + 14);
+        w += 3;
+      }
+    }
+    out.positions = pos; out.vertexRGB = vrgb; out.vertexCount = nv;
+  }
+
+  // --- 0x15 三角形（v3）。0x14 は v1 専用なので読まない ---
+  let nt = 0;
+  for (const c of lists.get(TAG_TRIANGLES_V3) || []) nt += Math.floor((c.end - c.start) / REC_TRIANGLE);
+  if (nt > 0) {
+    const tv = new Uint32Array(nt * 3), tr = new Uint8Array(nt * 9), tu = new Int32Array(nt);
+    let w = 0;
+    for (const c of lists.get(TAG_TRIANGLES_V3)) {
+      const n = Math.floor((c.end - c.start) / REC_TRIANGLE);
+      for (let i = 0; i < n; i++, w++) {
+        const o = c.start + i * REC_TRIANGLE;
+        tv[w * 3] = dv.getUint32(o, true);
+        tv[w * 3 + 1] = dv.getUint32(o + 4, true);
+        tv[w * 3 + 2] = dv.getUint32(o + 8, true);
+        for (let k = 0; k < 9; k++) tr[w * 9 + k] = dv.getUint8(o + 12 + k);
+        tu[w] = dv.getInt32(o + 21, true);
+      }
+    }
+    out.triV = tv; out.triRGB = tr; out.triUV = tu; out.triangleCount = nt;
+  }
+
+  // --- 0x32 面 UV。頂点 UV(0x28) は ZEdit 側でも参照がずれるので使わない ---
+  let nu = 0;
+  for (const c of lists.get(TAG_TRIANGLE_UVS) || []) nu += Math.floor((c.end - c.start) / REC_TRIANGLE_UV);
+  if (nu > 0) {
+    const tex = new Int32Array(nu), uu = new Float32Array(nu * 3), vv = new Float32Array(nu * 3);
+    let w = 0, t = 0;
+    for (const c of lists.get(TAG_TRIANGLE_UVS)) {
+      const n = Math.floor((c.end - c.start) / REC_TRIANGLE_UV);
+      for (let i = 0; i < n; i++, w++) {
+        const o = c.start + i * REC_TRIANGLE_UV;
+        tex[w] = dv.getInt32(o, true);
+        for (let k = 0; k < 3; k++, t++) {
+          uu[t] = dv.getFloat32(o + 4 + k * 4, true);
+          vv[t] = dv.getFloat32(o + 16 + k * 4, true);
+        }
+      }
+    }
+    out.uvTex = tex; out.uvU = uu; out.uvV = vv; out.uvCount = nu;
+  }
+
+  // --- 0x1F テクスチャ（JPEG 埋め込み）---
+  for (const c of lists.get(TAG_TEXTURES) || []) {
+    let q = c.start;
+    const count = dv.getUint32(q, true); q += 4;
+    for (let i = 0; i < count && q + 4 <= c.end; i++) {
+      const nl = dv.getUint32(q, true); q += 4;
+      const name = decodeName(bytes, q, nl); q += nl;
+      q += 4;                                   // 常に 0
+      const flags = bytes.slice(q, q + 4); q += 4;
+      const format = dv.getUint32(q, true); q += 4;
+      const size = dv.getUint32(q, true); q += 4;
+      const jpeg = bytes.slice(q, q + size); q += size;
+      out.textures.push({ name, flags, format, jpeg });
+    }
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------
+   ジオメトリ構築
+   ------------------------------------------------------------------ */
+
+function buildModel(m) {
+  const nv = m.vertexCount, nt = m.triangleCount;
+  const pos = m.positions, V = m.triV, TR = m.triRGB;
+
+  // 頂点法線と頂点色を三角形から積算する。
+  // ファイル側の頂点色は ZEdit 出力で未使用（黒）なので当てにしない。
+  const nrm = new Float32Array(nv * 3);
+  const csum = new Float32Array(nv * 3);
+  const ccnt = new Float32Array(nv);
+
+  for (let t = 0; t < nt; t++) {
+    const i0 = V[t * 3], i1 = V[t * 3 + 1], i2 = V[t * 3 + 2];
+    if (i0 >= nv || i1 >= nv || i2 >= nv) continue;
+    const ax = pos[i0 * 3], ay = pos[i0 * 3 + 1], az = pos[i0 * 3 + 2];
+    const e1x = pos[i1 * 3] - ax, e1y = pos[i1 * 3 + 1] - ay, e1z = pos[i1 * 3 + 2] - az;
+    const e2x = pos[i2 * 3] - ax, e2y = pos[i2 * 3 + 1] - ay, e2z = pos[i2 * 3 + 2] - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    nrm[i0 * 3] += nx; nrm[i0 * 3 + 1] += ny; nrm[i0 * 3 + 2] += nz;
+    nrm[i1 * 3] += nx; nrm[i1 * 3 + 1] += ny; nrm[i1 * 3 + 2] += nz;
+    nrm[i2 * 3] += nx; nrm[i2 * 3 + 1] += ny; nrm[i2 * 3 + 2] += nz;
+    const b9 = t * 9;
+    csum[i0 * 3] += TR[b9] / 255;         csum[i0 * 3 + 1] += TR[b9 + 1] / 255;         csum[i0 * 3 + 2] += TR[b9 + 2] / 255;
+    csum[i1 * 3] += TR[b9 + 3] / 255;     csum[i1 * 3 + 1] += TR[b9 + 4] / 255;         csum[i1 * 3 + 2] += TR[b9 + 5] / 255;
+    csum[i2 * 3] += TR[b9 + 6] / 255;     csum[i2 * 3 + 1] += TR[b9 + 7] / 255;         csum[i2 * 3 + 2] += TR[b9 + 8] / 255;
+    ccnt[i0]++; ccnt[i1]++; ccnt[i2]++;
+  }
+
+  const col = new Float32Array(nv * 3);
+  for (let i = 0; i < nv; i++) {
+    const c = ccnt[i] || 1;
+    col[i * 3] = csum[i * 3] / c; col[i * 3 + 1] = csum[i * 3 + 1] / c; col[i * 3 + 2] = csum[i * 3 + 2] / c;
+    const x = nrm[i * 3], y = nrm[i * 3 + 1], z = nrm[i * 3 + 2];
+    const l = Math.sqrt(x * x + y * y + z * z);
+    if (l > 1e-30) { nrm[i * 3] = x / l; nrm[i * 3 + 1] = y / l; nrm[i * 3 + 2] = z / l; }
+    else { nrm[i * 3] = 0; nrm[i * 3 + 1] = 0; nrm[i * 3 + 2] = 1; }
+  }
+
+  // 範囲（カメラ距離とグリッド位置用）。壊れた値が入るとカメラが壊れるのでガードする
+  let minx = Infinity, miny = Infinity, minz = Infinity, maxx = -Infinity, maxy = -Infinity, maxz = -Infinity;
+  for (let i = 0; i < nv; i++) {
+    const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+    if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
+    if (x < minx) minx = x; if (x > maxx) maxx = x;
+    if (y < miny) miny = y; if (y > maxy) maxy = y;
+    if (z < minz) minz = z; if (z > maxz) maxz = z;
+  }
+  if (![minx, miny, minz, maxx, maxy, maxz].every(isFinite)) {
+    minx = miny = minz = -1; maxx = maxy = maxz = 1;
+  }
+  const bound = { min: [minx, miny, minz], max: [maxx, maxy, maxz] };
+  bound.center = [(minx + maxx) / 2, (miny + maxy) / 2, (minz + maxz) / 2];
+  bound.radius = Math.max(1e-3, Math.max(maxx - minx, maxy - miny, maxz - minz) / 2);
+
+  // 頂点は pos（nv 個）に詰まっていて、三角形は V が索引で指す。
+  // ここを 0..nt*3 の連番にすると、実機の drawElements は範囲外として弾いて何も描かない
+  //（SwiftShader だけは黙って化けたものを見せてくれるので、ヘッドレス検証では気づけなかった）
+  const idxAll = new Uint32Array(nt * 3);
+  let na = 0;
+  for (let t = 0; t < nt; t++) {
+    const b = t * 3, i0 = V[b], i1 = V[b + 1], i2 = V[b + 2];
+    if (i0 >= nv || i1 >= nv || i2 >= nv) continue;
+    idxAll[na++] = i0; idxAll[na++] = i1; idxAll[na++] = i2;
+  }
+
+  // テクスチャ表示時に「色だけで塗る」側（UV の無い三角形）
+  const noUv = [];
+  if (m.uvCount) for (let t = 0; t < nt; t++) if (m.triUV[t] < 0 || m.triUV[t] >= m.uvCount) noUv.push(t);
+  const idxPlain = new Uint32Array(noUv.length * 3);
+  let np = 0;
+  for (const t of noUv) {
+    const b = t * 3, i0 = V[b], i1 = V[b + 1], i2 = V[b + 2];
+    if (i0 >= nv || i1 >= nv || i2 >= nv) continue;
+    idxPlain[np++] = i0; idxPlain[np++] = i1; idxPlain[np++] = i2;
+  }
+
+  const model = {
+    vertexCount: nv, triangleCount: nt, bound,
+    pos, nrm, col,
+    idxAll: na === idxAll.length ? idxAll : idxAll.subarray(0, na),
+    idxPlain: np === idxPlain.length ? idxPlain : idxPlain.subarray(0, np),
+    _wire: null,
+    // ワイヤーは三角形の 3 辺をそのまま（辺の重複除去はメモリ対効果に見合わない）。
+    // 数百万面だと 48MB 級になるので、ワイヤーモードを押すまで作らない。
+    // ここも頂点索引（V）を使う。pos は nv 個しか無い
+    get wire() {
+      if (!this._wire) {
+        const w = new Uint32Array(nt * 6);
+        let o = 0;
+        for (let t = 0; t < nt; t++) {
+          const b = t * 3, i0 = V[b], i1 = V[b + 1], i2 = V[b + 2];
+          if (i0 >= nv || i1 >= nv || i2 >= nv) continue;
+          w[o] = i0; w[o + 1] = i1; w[o + 2] = i1; w[o + 3] = i2; w[o + 4] = i2; w[o + 5] = i0;
+          o += 6;
+        }
+        this._wire = o === w.length ? w : w.subarray(0, o);
+      }
+      return this._wire;
+    },
+    textured: null, textures: m.textures, uvCount: m.uvCount, raw: m,
+  };
+  if (m.uvCount && m.textures.length) model.textured = buildTextured(m, nrm);
+  return model;
+}
+
+// 面 UV は「三角形あたり 1 レコード」なので、UV 付き三角形は頂点を複製して UV を持たせる。
+// テクスチャごとにまとめると draw call が枚数分で済む。
+function buildTextured(m, sharedNrm) {
+  const buckets = new Map();
+  for (let t = 0; t < m.triangleCount; t++) {
+    const u = m.triUV[t];
+    if (u < 0 || u >= m.uvCount) continue;
+    const tex = m.uvTex[u];
+    if (tex < 0 || tex >= m.textures.length) continue;
+    if (!buckets.has(tex)) buckets.set(tex, []);
+    buckets.get(tex).push(t);
+  }
+  const groups = [];
+  const pos = m.positions, V = m.triV, TR = m.triRGB;
+  for (const [tex, tris] of buckets) {
+    const n = tris.length;
+    const p = new Float32Array(n * 9), nr = new Float32Array(n * 9),
+          uv = new Float32Array(n * 6), cl = new Float32Array(n * 9),
+          ix = new Uint32Array(n * 3);
+    for (let j = 0; j < n; j++) {
+      const t = tris[j], u = m.triUV[t], b9 = t * 9;
+      for (let k = 0; k < 3; k++) {
+        const vi = V[t * 3 + k], dp = j * 9 + k * 3, du = j * 6 + k * 2;
+        p[dp] = pos[vi * 3]; p[dp + 1] = pos[vi * 3 + 1]; p[dp + 2] = pos[vi * 3 + 2];
+        nr[dp] = sharedNrm[vi * 3]; nr[dp + 1] = sharedNrm[vi * 3 + 1]; nr[dp + 2] = sharedNrm[vi * 3 + 2];
+        uv[du] = m.uvU[u * 3 + k]; uv[du + 1] = m.uvV[u * 3 + k];
+        cl[dp] = TR[b9 + k * 3] / 255; cl[dp + 1] = TR[b9 + k * 3 + 1] / 255; cl[dp + 2] = TR[b9 + k * 3 + 2] / 255;
+        ix[j * 3 + k] = j * 3 + k;
+      }
+    }
+    groups.push({ textureIndex: tex, pos: p, nrm: nr, uv, col: cl, idx: ix });
+  }
+  return groups;
+}
+
+/* ------------------------------------------------------------------
+   行列（column-major）
+   ------------------------------------------------------------------ */
+
+function mat4Perspective(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), o = new Float32Array(16);
+  o[0] = f / aspect; o[5] = f; o[11] = -1;
+  o[10] = (far + near) / (near - far); o[14] = (2 * far * near) / (near - far);
+  return o;
+}
+
+function mat4LookAt(eye, center, up) {
+  let zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
+  let l = Math.hypot(zx, zy, zz) || 1; zx /= l; zy /= l; zz /= l;
+  let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+  l = Math.hypot(xx, xy, xz);
+  if (l < 1e-9) { xx = 1; xy = 0; xz = 0; } else { xx /= l; xy /= l; xz /= l; }
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  return new Float32Array([
+    xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0,
+    -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
+    -(yx * eye[0] + yy * eye[1] + yz * eye[2]),
+    -(zx * eye[0] + zy * eye[1] + zz * eye[2]), 1,
+  ]);
+}
+
+function mat3FromMat4(v) {   // view の 3x3。直交行列なので法線変換はこれでそのまま
+  return new Float32Array([v[0], v[1], v[2], v[4], v[5], v[6], v[8], v[9], v[10]]);
+}
+
+/* ------------------------------------------------------------------
+   描画
+   ------------------------------------------------------------------ */
+
+const VS_MESH = `
+#define HAS_
+#ifdef HAS_UV
+attribute vec2 aUV;
+varying vec2 vUV;
+#endif
+attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol;
+uniform mat4 uProj, uView; uniform mat3 uNrmMat;
+varying vec3 vN; varying vec3 vC;
+void main() {
+  vN = normalize(uNrmMat * aNrm);
+  vC = aCol;
+#ifdef HAS_UV
+  vUV = aUV;
+#endif
+  gl_Position = uProj * uView * vec4(aPos, 1.0);
+}`;
+
+const FS_MESH = `
+#define HAS_
+precision highp float;
+#ifdef HAS_UV
+uniform sampler2D uTex;
+varying vec2 vUV;
+#endif
+varying vec3 vN; varying vec3 vC;
+uniform int uMode;              // 0=色+照明 1=テクスチャ+照明 3=無照明
+uniform vec3 uKey, uFill, uRim;         // 光源の向き（ビュー空間）
+uniform vec3 uKeyCol, uFillCol;         // 光源の色。向きと色は別物なので分けている
+vec3 toLinear(vec3 c) {
+  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+vec3 toSRGB(vec3 c) {
+  c = max(c, vec3(0.0));
+  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+void main() {
+  // raw はファイルに書かれていた色そのもの、lin は照明計算用の線形値。
+  // 頂点色もテクスチャも albedo なので、掛け算は線形側で行う（sRGB のまま掛けると暗くなる）
+  vec3 raw = vC;
+  vec3 lin = toLinear(vC);
+#ifdef HAS_UV
+  vec3 t = texture2D(uTex, vUV).rgb;
+  raw *= t;
+  lin *= toLinear(t);
+  // UV そのものを見たい（u=赤, v=緑）。テクスチャがずれる原因を切り分けるのに使える
+  if (uMode == 4) { gl_FragColor = vec4(vUV, 0.5, 1.0); return; }
+#endif
+  if (uMode == 3) { gl_FragColor = vec4(raw, 1.0); return; }   // 無照明は色空間も動かさない
+  vec3 n = normalize(vN);
+  vec3 c = lin * 0.30;                                   // アンビエント
+  c += lin * 0.20 * max(0.35 + 0.65 * n.y, 0.0);         // 上向きヘミスカイ
+  c += lin * max(dot(n, uKey), 0.0) * 1.05 * uKeyCol;   // キー
+  c += lin * max(dot(n, uFill), 0.0) * 0.30 * uFillCol; // フィル
+  c += lin * pow(max(dot(n, uRim), 0.0), 3.0) * 0.28;    // リム
+  gl_FragColor = vec4(toSRGB(c), 1.0);
+}`;
+
+const VS_LINE = `
+attribute vec3 aPos; uniform mat4 uProj, uView; uniform vec3 uOffset;
+void main() { gl_Position = uProj * uView * vec4(aPos + uOffset, 1.0); }`;
+const FS_LINE = `precision mediump float; uniform vec4 uColor; void main(){ gl_FragColor = uColor; }`;
+
+class Viewer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    const gl = this.gl = canvas.getContext("webgl2", {
+      antialias: true, alpha: false, preserveDrawingBuffer: true, powerPreference: "high-performance",
+    });
+    if (!gl) throw new Error("このブラウザは WebGL2 が使えないみたい");
+    gl.enable(gl.DEPTH_TEST);
+    // ワイヤーは面と同じ深さに来るので、LESS だと背面剔除に負けて輪郭しか出ない
+    gl.depthFunc(gl.LEQUAL);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    this.bg = [0.078, 0.082, 0.11, 1];
+    this.mode = 0;
+    this.showGrid = true;
+    this.wireOverlay = true;        // 色/テクスチャ/フラットの上に線を重ねる既定値
+    this.cull = false;
+    // 光源の色は無彩色が既定。向きベクトルを色に流用していた頃は、
+    // key の緑成分が負だったせいで全体が紫がっていた。試すときは
+    // viewer.keyCol = viewer.keyDir で「向きを色にした旧表示」に戻せる
+    this.keyCol = [1, 1, 1];
+    this.fillCol = [1, 1, 1];
+    this.model = null;
+    this.progs = {
+      // 先頭の #define HAS_ を接頭辞ごと差し替えて UV 付き/無しを切り替える。
+      // VS と FS の両方にこの行が必要（片方だけだと FS 側で HAS_UV が黙って消えた）
+      plain: this.makeProgram(VS_MESH.replace("#define HAS_\n", ""), FS_MESH.replace("#define HAS_\n", "")),
+      tex: this.makeProgram(VS_MESH.replace("#define HAS_", "#define HAS_UV"), FS_MESH.replace("#define HAS_", "#define HAS_UV")),
+      line: this.makeProgram(VS_LINE, FS_LINE),
+    };
+    this.cam = { yaw: Math.PI * 0.72, pitch: Math.PI * 0.24, dist: 3, target: [0, 0, 0] };
+    this.texCache = new Map();
+    this.dirty = true;
+  }
+
+  makeProgram(vs, fs) {
+    const gl = this.gl;
+    const compile = (type, text) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, text); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error("shader: " + gl.getShaderInfoLog(s));
+      return s;
+    };
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error("link: " + gl.getProgramInfoLog(p));
+    const o = { p, a: {}, u: {} };
+    for (const n of ["aPos", "aNrm", "aCol", "aUV"]) {
+      const l = gl.getAttribLocation(p, n); if (l >= 0) o.a[n] = l;
+    }
+    for (const n of ["uProj", "uView", "uNrmMat", "uMode", "uTex", "uKey", "uFill", "uRim",
+                     "uKeyCol", "uFillCol", "uColor", "uOffset"]) {
+      // getUniformLocation は使われない uniform だと null、使われる location 0 は真偽値だと falsy。
+      // `if (l)` にすると location 0 の uniform が黙って消えるので null 判定にしている
+      const l = gl.getUniformLocation(p, n); if (l !== null) o.u[n] = l;
+    }
+    return o;
+  }
+
+  buf(data, target) {
+    const gl = this.gl;
+    const b = gl.createBuffer();
+    target = target || gl.ARRAY_BUFFER;
+    gl.bindBuffer(target, b);
+    gl.bufferData(target, data, gl.STATIC_DRAW);
+    return b;
+  }
+
+  load(model) {
+    const gl = this.gl;
+    this.dispose();
+    this.model = model;
+
+    const g = {};
+    g.pos = this.buf(model.pos); g.nrm = this.buf(model.nrm); g.col = this.buf(model.col);
+    g.idx = this.buf(model.idxAll, gl.ELEMENT_ARRAY_BUFFER); g.idx.count = model.idxAll.length;
+    g.plain = model.idxPlain.length ? this.buf(model.idxPlain, gl.ELEMENT_ARRAY_BUFFER) : null;
+    if (g.plain) g.plain.count = model.idxPlain.length;
+    g.wire = null;   // ワイヤーは実際に使うときまで作らない
+    this.gpu = g;
+
+    this.texGroups = (model.textured || []).map(gr => ({
+      textureIndex: gr.textureIndex,
+      pos: this.buf(gr.pos), nrm: this.buf(gr.nrm), col: this.buf(gr.col), uv: this.buf(gr.uv),
+      idx: this.buf(gr.idx, gl.ELEMENT_ARRAY_BUFFER), count: gr.idx.length,
+    }));
+
+    this.texCache.forEach(t => gl.deleteTexture(t));
+    this.texCache.clear();
+    if (this.gridBuf) { gl.deleteBuffer(this.gridBuf); this.gridBuf = null; }   // 方眼はモデルの寸法に合わせ直す
+    this.cam.target = model.bound.center.slice();
+    this.fitCamera();
+    this.dirty = true;
+  }
+
+  dispose() {
+    const gl = this.gl;
+    if (this.gpu) for (const k of ["pos", "nrm", "col", "idx", "plain", "wire"]) if (this.gpu[k]) gl.deleteBuffer(this.gpu[k]);
+    if (this.texGroups) for (const g of this.texGroups) for (const k of ["pos", "nrm", "col", "uv", "idx"]) gl.deleteBuffer(g[k]);
+    this.gpu = null; this.texGroups = null;
+  }
+
+  fitCamera() {
+    if (!this.model) return;
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+    this.cam.dist = this.model.bound.radius * 1.9 / Math.min(1, aspect);
+    this.dirty = true;
+  }
+
+  async texture(i) {
+    if (this.texCache.has(i)) return this.texCache.get(i);
+    const t = this.model && this.model.textures[i];
+    if (!t) return null;
+    const gl = this.gl;
+    const blob = new Blob([t.jpeg], { type: "image/jpeg" });
+    let src = null;
+    try {
+      // ZPR の UV は v=0 が画像下端（Blender と同じ向き）。ImageBitmap には UNPACK_FLIP_Y_WEBGL が
+      // 効かないので、生成時に flipY を指定する（ここを省くと黙って上下反転表示になる）
+      src = await createImageBitmap(blob, { imageOrientation: "flipY" });
+    } catch (e) {
+      src = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im); im.onerror = () => rej(new Error("jpeg decode"));
+        im.src = URL.createObjectURL(blob);
+      });
+    }
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    // ZPR の UV は v=0 が画像下端（Blender と同じ向き）なので Y を反転して入れる
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    if (src.close) src.close();
+    this.texCache.set(i, tex);
+    this.dirty = true;
+    return tex;
+  }
+
+  meshUniforms(prog, view, nrm3, key, fill, rim, mode) {
+    const gl = this.gl;
+    gl.useProgram(prog.p);
+    gl.uniformMatrix4fv(prog.u.uProj, false, this.proj);
+    gl.uniformMatrix4fv(prog.u.uView, false, view);
+    gl.uniformMatrix3fv(prog.u.uNrmMat, false, nrm3);
+    gl.uniform1i(prog.u.uMode, mode);
+    if (prog.u.uKey) {
+      gl.uniform3fv(prog.u.uKey, key); gl.uniform3fv(prog.u.uFill, fill); gl.uniform3fv(prog.u.uRim, rim);
+      gl.uniform3fv(prog.u.uKeyCol, this.keyCol); gl.uniform3fv(prog.u.uFillCol, this.fillCol);
+    }
+  }
+
+  attribs(prog, pos, nrm, col, uv) {
+    const gl = this.gl;
+    const bind = (loc, buffer, size) => {
+      if (loc === undefined) return;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
+    };
+    bind(prog.a.aPos, pos, 3); bind(prog.a.aNrm, nrm, 3); bind(prog.a.aCol, col, 3);
+    if (uv) bind(prog.a.aUV, uv, 2);
+  }
+
+  // 方眼もワイヤーも背景と同系だと消える。背景の輝度を見てインク色を裏返す
+  ink(a) {
+    const l = 0.2126 * this.bg[0] + 0.7152 * this.bg[1] + 0.0722 * this.bg[2];
+    return l > 0.5 ? [0.07, 0.08, 0.11, a] : [0.88, 0.92, 1.0, a];
+  }
+
+  draw() {
+    const gl = this.gl, m = this.model;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(this.canvas.clientWidth * dpr), h = Math.round(this.canvas.clientHeight * dpr);
+    if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!m || !this.gpu) return;
+
+    const c = this.cam;
+    const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    const eye = [
+      c.target[0] + c.dist * cp * Math.cos(c.yaw),
+      c.target[1] + c.dist * cp * Math.sin(c.yaw),
+      c.target[2] + c.dist * sp,
+    ];
+    const aspect = w / Math.max(1, h);
+    const near = Math.max(1e-4, c.dist * 0.0006), far = c.dist * 20 + m.bound.radius * 20;
+    this.proj = mat4Perspective(0.62, aspect, near, far);
+    const view = mat4LookAt(eye, c.target, [0, 0, 1]);
+    const nrm3 = mat3FromMat4(view);
+
+    // 光源はビュー空間に固定。回しても影が追随するので形の凹凸が見えやすい
+    const toV = v => {
+      const l = Math.hypot(v[0], v[1], v[2]) || 1;
+      const x = v[0] / l, y = v[1] / l, z = v[2] / l;
+      return [view[0] * x + view[4] * y + view[8] * z, view[1] * x + view[5] * y + view[9] * z, view[2] * x + view[6] * y + view[10] * z];
+    };
+    const key = toV([0.45, -0.55, 0.85]), fill = toV([-0.8, 0.45, 0.2]), rim = toV([0.1, 0.25, -1]);
+    this.keyDir = key; this.fillDir = fill;   // コンソールから旧表示に戻せるよう取っておく
+
+    gl.depthMask(true);
+    // ワイヤーを面の上に載せるため、塗りだけ深度を奥にずらす。線だけの時は不要
+    const offset = this.wireOverlay && this.mode !== 2;
+    if (offset) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.1, 1.1); }
+    if (this.cull) { gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); } else gl.disable(gl.CULL_FACE);
+
+    // テクスチャあり/無しのどちらでも同じ見え方にするため、無照明もテクスチャ経路に乗せる
+    const wantTex = (this.mode === 1 || this.mode === 3 || this.mode === 4) && this.texGroups && this.texGroups.length;
+    if (wantTex) {
+      // UV の無い三角形は頂点色で塗り、その上にテクスチャ付きを重ねる
+      const p0 = this.progs.plain;
+      this.attribs(p0, this.gpu.pos, this.gpu.nrm, this.gpu.col);
+      this.meshUniforms(p0, view, nrm3, key, fill, rim, this.mode);
+      if (this.gpu.plain && this.mode !== 4) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gpu.plain);
+        gl.drawElements(gl.TRIANGLES, this.gpu.plain.count, gl.UNSIGNED_INT, 0);
+      }
+      const p1 = this.progs.tex;
+      for (const g of this.texGroups) {
+        const tex = this.texCache.get(g.textureIndex);
+        if (!tex) { this.texture(g.textureIndex); continue; }
+        this.attribs(p1, g.pos, g.nrm, g.col, g.uv);
+        this.meshUniforms(p1, view, nrm3, key, fill, rim, this.mode);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(p1.u.uTex, 0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.idx);
+        gl.drawElements(gl.TRIANGLES, g.count, gl.UNSIGNED_INT, 0);
+      }
+    } else {
+      const p0 = this.progs.plain;
+      this.attribs(p0, this.gpu.pos, this.gpu.nrm, this.gpu.col);
+      this.meshUniforms(p0, view, nrm3, key, fill, rim, this.mode === 2 ? 0 : this.mode);
+      // 「ワイヤーのみ」モードは面を塗らない
+      if (this.mode !== 2 && this.gpu.idx) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gpu.idx);
+        gl.drawElements(gl.TRIANGLES, this.gpu.idx.count, gl.UNSIGNED_INT, 0);
+      }
+    }
+
+    const wantWire = this.mode === 2 || this.wireOverlay;
+    if (wantWire || this.showGrid) {
+      if (offset) gl.disable(gl.POLYGON_OFFSET_FILL);
+      const lp = this.progs.line;
+      gl.useProgram(lp.p);
+      gl.uniformMatrix4fv(lp.u.uProj, false, this.proj);
+      gl.uniformMatrix4fv(lp.u.uView, false, view);
+      if (this.showGrid) {
+        if (!this.gridBuf) this.makeGrid(m.bound.radius);
+        gl.enable(gl.BLEND);                      // 方眼は半透明で敷く
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.gridBuf);
+        gl.enableVertexAttribArray(lp.a.aPos);
+        gl.vertexAttribPointer(lp.a.aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.uniform3f(lp.u.uOffset, 0, 0, m.bound.min[2] - m.bound.radius * 0.002);
+        gl.uniform4fv(lp.u.uColor, this.ink(0.2));
+        gl.drawArrays(gl.LINES, 0, this.gridCount);
+      }
+      if (wantWire) {
+        if (!this.gpu.wire) {
+          this.gpu.wire = this.buf(m.wire, gl.ELEMENT_ARRAY_BUFFER);
+          this.gpu.wire.count = m.wire.length;
+        }
+        // 1px の線は MSAA と alpha ブレンドを合わせると実機で消える（カバレッジ 1/4 掛けで透明になる）。
+        // ブレンドを通さず不透明で引き、viewport を 1px ずらしてもう一度引いて太さを出す
+        gl.disable(gl.BLEND);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.gpu.pos);
+        gl.enableVertexAttribArray(lp.a.aPos);
+        gl.vertexAttribPointer(lp.a.aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.uniform3f(lp.u.uOffset, 0, 0, 0);
+        gl.uniform4fv(lp.u.uColor, this.ink(1.0));
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gpu.wire);
+        const vp = gl.getParameter(gl.VIEWPORT);
+        for (const dx of [0, 1]) {
+          gl.viewport(vp[0] + dx, vp[1], vp[2], vp[3]);
+          gl.drawElements(gl.LINES, this.gpu.wire.count, gl.UNSIGNED_INT, 0);
+        }
+        gl.viewport(vp[0], vp[1], vp[2], vp[3]);
+        gl.enable(gl.BLEND);
+      }
+    }
+  }
+
+  // モデルを囲む方眼を Z 底面に敷く。mm 単位なので間隔は 10 のべきに乗せて読むやすくする
+  makeGrid(R) {
+    const N = 20, v = [];
+    for (let i = 0; i <= N; i++) {
+      const t = -R + (2 * R * i) / N;
+      v.push(-R, t, 0, R, t, 0, t, -R, 0, t, R, 0);
+    }
+    this.gridBuf = this.buf(new Float32Array(v));
+    this.gridCount = v.length / 3;
+  }
+}
+
+/* ------------------------------------------------------------------
+   UI・入力
+   ------------------------------------------------------------------ */
+
+const $ = s => document.querySelector(s);
+const canvas = $("#gl");
+const drop = $("#drop"), busy = $("#busy"), busymsg = $("#busymsg"), toast = $("#toast");
+let viewer = null;
+
+function say(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(say.t);
+  say.t = setTimeout(() => toast.classList.remove("show"), 6000);
+}
+const busyShow = t => { busymsg.textContent = t; busy.classList.add("show"); };
+const busyHide = () => busy.classList.remove("show");
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+const fmtInt = n => n.toLocaleString("ja-JP");
+const fmtBytes = n => n >= 1048576 ? (n / 1048576).toFixed(2) + " MB" : (n / 1024).toFixed(1) + " KB";
+const escapeHTML = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function fmtMM(v) {
+  const a = Math.abs(v);
+  if (a >= 10000) return (v / 1000).toFixed(2) + " m";
+  if (a >= 1) return v.toFixed(a >= 100 ? 1 : 2) + " mm";
+  return v.toFixed(3) + " mm";
+}
+
+async function openFile(file) {
+  if (!file) return;
+  if (!viewer) {
+    try { viewer = new Viewer(canvas); } catch (e) { say(e.message); return; }
+    installCamera(viewer);
+    startLoop(viewer);
+  }
+  busyShow("ファイルを読んでる…");
+  await nextFrame();
+  let model;
+  try {
+    const buf = await file.arrayBuffer();
+    await nextFrame();
+    const parsed = parseZpr(buf, file.name);
+    busyShow("メッシュを組み立ててる…");
+    await nextFrame();
+    model = buildModel(parsed);
+  } catch (e) {
+    console.error(e);
+    busyHide();
+    say("開けなかったよ… " + e.message);
+    return;
+  }
+  if (!model.vertexCount || !model.triangleCount) {
+    busyHide();
+    say("頂点か三角形が見つからないよ（0x0A / 0x15 チャンクが無い）");
+    return;
+  }
+  busyShow("GPU にのせてる…");
+  await nextFrame();
+  viewer.load(model);
+  viewer.mode = (model.textured && model.textured.length) ? 1 : 0;
+  await nextFrame();
+  busyHide();
+  drop.classList.add("hidden");
+  $("#panel").classList.add("show");
+  $("#tips").classList.add("show");
+  showInfo(model);
+  syncButtons();
+}
+
+function showInfo(model) {
+  const m = model.raw, b = model.bound;
+  $("#fname").textContent = m.filename;
+  const dim = [0, 1, 2].map(i => fmtMM(b.max[i] - b.min[i])).join(" × ") + "（XYZ・Z 上り）";
+  const texMode = ["なし", "外部参照", "埋め込み"][m.textureMode] ?? ("不明 " + m.textureMode);
+  const rows = [
+    ["頂点", fmtInt(model.vertexCount)],
+    ["三角形", fmtInt(model.triangleCount)],
+    ["面 UV", fmtInt(model.uvCount)],
+    ["テクスチャ", model.textures.length ? fmtInt(model.textures.length) + " 枚・" + texMode : "0 枚"],
+    ["寸法", dim],
+    ["サイズ", fmtBytes(m.size)],
+    ["作成", (m.creator || "-") + " / v" + m.version],
+  ];
+  $("#meta").innerHTML = rows.map(r => `<div>${escapeHTML(r[0])}</div><b>${escapeHTML(r[1])}</b>`).join("");
+
+  const th = $("#thumbs"); th.innerHTML = "";
+  $("#texsec").style.display = m.textures.length ? "" : "none";
+  $("#texcount").textContent = m.textures.length ? "(" + m.textures.length + ")" : "";
+  m.textures.forEach((t, i) => {
+    const url = URL.createObjectURL(new Blob([t.jpeg], { type: "image/jpeg" }));
+    const d = document.createElement("div");
+    d.className = "th";
+    d.innerHTML = `<img src="${url}" alt="">`;
+    d.title = t.name + "（クリックで JPEG を保存）";
+    d.onmouseenter = () => { $("#texname").textContent = `#${i}  ${t.name}  ${fmtBytes(t.jpeg.length)}`; };
+    d.onclick = () => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (t.name || "texture" + i).replace(/[\\/:*?"<>|]/g, "_");
+      a.click();
+    };
+    th.appendChild(d);
+  });
+
+  const KNOWN = {
+    0x0a: "頂点", 0x15: "三角形", 0x1f: "テクスチャ", 0x28: "頂点 UV", 0x32: "面 UV",
+    0x14: "三角形 v1", 0x3e: "変換行列?", 0x46: "未知", 0x50: "未知",
+  };
+  const tags = [];
+  for (const [tag, list] of m.lists) {
+    const size = list.reduce((a, c) => a + (c.end - c.start), 0);
+    tags.push(`<span>0x${tag.toString(16).padStart(2, "0")}</span> ${KNOWN[tag] || "未知"} ${fmtBytes(size)}${list.length > 1 ? " x" + list.length : ""}`);
+  }
+  $("#chunks").innerHTML = tags.join("<br>") +
+    "<br>tail: " + Array.from(m.headerTail, x => x.toString(16).padStart(2, "0")).join(" ");
+}
+
+function setMode(mode) {
+  if (!viewer) return;
+  if ((mode === 1 || mode === 4) && !(viewer.texGroups && viewer.texGroups.length)) {
+    say(mode === 1 ? "このファイルにテクスチャは無いよ" : "UV のある面がないよ");
+    return;
+  }
+  viewer.mode = mode;
+  viewer.dirty = true;
+  syncButtons();
+}
+
+function syncButtons() {
+  if (!viewer) return;
+  document.querySelectorAll("#modes .btn").forEach(b => b.classList.toggle("on", +b.dataset.mode === viewer.mode));
+  $("#tgrid").classList.toggle("on", viewer.showGrid);
+  $("#twire").classList.toggle("on", viewer.wireOverlay);
+  $("#tcull").classList.toggle("on", viewer.cull);
+}
+
+function installUI() {
+  $("#pick").onclick = () => $("#file").click();
+  $("#file").onchange = e => openFile(e.target.files[0]);
+  $("#phead").onclick = () => {
+    const p = $("#panel");
+    p.classList.toggle("collapsed");
+    $("#fold").textContent = p.classList.contains("collapsed") ? "+" : "-";
+  };
+  document.querySelectorAll("#modes .btn").forEach(b => b.onclick = () => setMode(+b.dataset.mode));
+  $("#tgrid").onclick = () => { viewer.showGrid = !viewer.showGrid; viewer.dirty = true; syncButtons(); };
+  $("#twire").onclick = () => { viewer.wireOverlay = !viewer.wireOverlay; viewer.dirty = true; syncButtons(); };
+  $("#tcull").onclick = () => { viewer.cull = !viewer.cull; viewer.dirty = true; syncButtons(); };
+  $("#tdump").onclick = () => {
+    const s = $("#chunksec");
+    s.style.display = s.style.display === "none" ? "" : "none";
+  };
+
+  const bgs = ["#14151c", "#2b2f3a", "#f2f2f0", "#16222e"];
+  $("#bgs").innerHTML = bgs.map((c, i) => `<div class="btn swatch" data-i="${i}" style="background:${c}"></div>`).join("");
+  document.querySelectorAll("#bgs .swatch").forEach((el, i) => {
+    el.onclick = () => {
+      if (!viewer) return;
+      const n = parseInt(bgs[i].slice(1), 16);
+      viewer.bg = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, 1];
+      document.querySelectorAll("#bgs .swatch").forEach(x => x.classList.toggle("on", x === el));
+      viewer.dirty = true;
+    };
+    if (i === 0) el.classList.add("on");
+  });
+
+  document.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("armed"); });
+  document.addEventListener("dragleave", e => { if (!e.relatedTarget) drop.classList.remove("armed"); });
+  document.addEventListener("drop", async e => {
+    e.preventDefault();
+    drop.classList.remove("armed");
+    const f = Array.from(e.dataTransfer.files || [])[0];
+    if (!f) return;
+    await openFile(f);
+  });
+  $("#file").addEventListener("click", e => e.stopPropagation());
+  canvas.addEventListener("click", () => { if (!viewer) drop.classList.remove("hidden"); });
+
+  window.addEventListener("keydown", e => {
+    if (!viewer || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k >= "1" && k <= "5") setMode(+k - 1);
+    else if (k === "r") { resetView(); }
+    else if (k === "g") { viewer.showGrid = !viewer.showGrid; viewer.dirty = true; syncButtons(); }
+    else if (k === "w") { viewer.wireOverlay = !viewer.wireOverlay; viewer.dirty = true; syncButtons(); }
+    else if (k === "c") { viewer.cull = !viewer.cull; viewer.dirty = true; syncButtons(); }
+    else if (k === "p") { snapshot(); }
+  });
+  window.addEventListener("resize", () => { if (viewer) viewer.dirty = true; });
+}
+
+function resetView() {
+  if (!viewer || !viewer.model) return;
+  viewer.cam.yaw = Math.PI * 0.72;
+  viewer.cam.pitch = Math.PI * 0.24;
+  viewer.cam.target = viewer.model.bound.center.slice();
+  viewer.fitCamera();
+  // 手前まで寄った状態から戻すので、周囲が見える分の余白を多めに取っておく
+  viewer.cam.dist *= 1.35;
+}
+
+function snapshot() {
+  if (!viewer) return;
+  viewer.draw();
+  canvas.toBlob(blob => {
+    if (!blob) { say("スクショはできなかった…"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ((viewer.model && viewer.model.raw.filename) || "zpr").replace(/\.zpr$/i, "") + ".png";
+    a.click();
+  }, "image/png");
+}
+
+function installCamera(v) {
+  const pointers = new Map();
+  let mode = null, last = null, pinch = 0;
+
+  canvas.addEventListener("pointerdown", e => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    mode = (e.button === 2 || e.shiftKey || e.button === 1) ? "pan" : "orbit";
+    last = { x: e.clientX, y: e.clientY };
+  });
+  canvas.addEventListener("pointermove", e => {
+    if (!pointers.has(e.pointerId) || !v.model) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size >= 2) {            // 2 本目はズーム＋パン
+      const [a, b] = Array.from(pointers.values());
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) v.cam.dist *= Math.max(0.5, Math.min(2, pinch / d));
+      pinch = d;
+      v.dirty = true;
+      return;
+    }
+    if (!last) return;
+    const dx = e.clientX - last.x, dy = e.clientY - last.y;
+    last = { x: e.clientX, y: e.clientY };
+    if (mode === "pan") pan(v, dx, dy);
+    else {
+      v.cam.yaw -= dx * 0.008;
+      v.cam.pitch = Math.max(-1.5533, Math.min(1.5533, v.cam.pitch + dy * 0.008));
+    }
+    v.dirty = true;
+  });
+  const up = e => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = 0;
+    if (!pointers.size) { mode = null; last = null; }
+  };
+  canvas.addEventListener("pointerup", up);
+  canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    if (!v.model) return;
+    v.cam.dist *= Math.exp(Math.sign(e.deltaY) * Math.min(0.25, Math.abs(e.deltaY) * 0.0015));
+    v.dirty = true;
+  }, { passive: false });
+  canvas.addEventListener("dblclick", resetView);
+}
+
+// 画面の向きに揃えてターゲットをスライドさせる
+function pan(v, dx, dy) {
+  const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
+  const half = Math.tan(0.31) * v.cam.dist;          // proj の fovy/2 と揃える
+  // 画面 px をワールド（mm）に直す。横方向はアスペクト分だけ視野が広い
+  const rx = dx / canvas.clientWidth * 2 * half * aspect;
+  const ry = dy / canvas.clientHeight * 2 * half;
+  const yaw = v.cam.yaw, cp = Math.cos(v.cam.pitch), sp = Math.sin(v.cam.pitch);
+  const X = [-Math.sin(yaw), Math.cos(yaw), 0];
+  const Y = [-Math.cos(yaw) * sp, -Math.sin(yaw) * sp, cp];   // eye を target から見た時の画面 Up
+  // ドラッグした方向にシーンが追従するよう、視点のターゲットは逆向きに滑らせる
+  for (let i = 0; i < 3; i++) v.cam.target[i] += Y[i] * ry - X[i] * rx;
+}
+
+function startLoop(v) {
+  const loop = () => {
+    // テクスチャは非同期デコードなので、揃うまで毎フレーム確認する。
+    // テクスチャ経路に乗るモード（テクスチャ/フラット/UV）全部で必要
+    if (v.texGroups && (v.mode === 1 || v.mode === 3 || v.mode === 4)) {
+      for (const g of v.texGroups) {
+        if (!v.texCache.has(g.textureIndex)) { v.texture(g.textureIndex); v.dirty = true; }
+      }
+    }
+    if (v.dirty) { v.dirty = false; v.draw(); }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+installUI();
+</script>
+</body>
+</html>
