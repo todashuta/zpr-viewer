@@ -156,6 +156,17 @@ def test_実アドオン出力のUV平面にテクスチャが貼れる():
     assert r["glError"] == 0, r
 
 
+def test_テクスチャはクリックで拡大表示になる():
+    r = open_sample("plane_uv.zpr", mode=1, case="lightbox")
+    lb = r["lightbox"]
+    assert lb["thumbs"] == 1, f"サムネイルが出ていない {r}"
+    assert lb["shown"] and lb["hasImage"], f"クリックで拡大表示にならない {r}"
+    assert lb["hasDownload"], f"ダウンロードの導線が消えている {r}"
+    assert lb["closed"], f"拡大表示が閉じられない {r}"
+    assert lb["imgRadius"] in ("0px", "0%"), f"拡大画像の角が丸い（縁が読めない）{lb}"
+    assert lb["imgBorder"] == "0px", f"拡大画像に枠が付いている（縁が読めない）{lb}"
+
+
 def test_頂点色付き立方体が読み込んだ規模のまま描画される():
     r = open_sample("cube_color.zpr", mode=0)
     assert r["verts"] == 8, r

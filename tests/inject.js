@@ -10,6 +10,7 @@
    &case=wire          : 方眼を消してワイヤー線のピクセル数を数える
    &wire=0             : (case=wire) ワイヤー重ねをオフにしてから測る
    &case=buffers       : 頂点バッファ規模と索引の最大値、単独 draw のエラー码を読む
+   &case=lightbox      : テクスチャの拡大表示が開くか、閉じられるか
    &case=pan           : pan() の移動方向をカメラ軸で検証する
    &case=reset         : 視点リセット後のカメラ距離を読む
    &wirecolor=255,0,0  : (case=wire) 線色を差し替えて描画の有無を切り分ける
@@ -271,6 +272,26 @@
         downDotY: +dot(toDown, up).toFixed(5),        // 視点は画面Upへ滑る＝正
         downDotX: +dot(toDown, right).toFixed(5),     // 横方向に漏れない＝0
       };
+    }
+
+    // --- テクスチャの拡大表示（ライトボックス） ---
+    if (q.get('case') === 'lightbox') {
+      const ths = document.querySelectorAll('#thumbs .th');
+      if (ths.length) ths[0].click();
+      res.lightbox = {
+        thumbs: ths.length,
+        shown: document.getElementById('lightbox').classList.contains('show'),
+        hasImage: !!document.getElementById('lbimg').getAttribute('src'),
+        hasDownload: !!document.getElementById('lbdl'),
+        caption: document.getElementById('lbname').textContent,
+      };
+      // 縁のピクセルを読む用途なので、枠や角丸で欠けないこと
+      const cs = getComputedStyle(document.getElementById('lbimg'));
+      res.lightbox.imgRadius = cs.borderTopLeftRadius;
+      res.lightbox.imgBorder = cs.borderTopWidth;
+      if (ths.length > 1) { stepLightbox(1); res.lightbox.steps = lbIndex; }
+      closeLightbox();
+      res.lightbox.closed = !document.getElementById('lightbox').classList.contains('show');
     }
 
     report(res);

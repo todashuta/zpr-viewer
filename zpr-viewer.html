@@ -87,6 +87,25 @@
   #thumbs .th:hover img { border-color: var(--accent); }
   #texname { color: var(--muted); font-size: 10.5px; margin-top: 6px; word-break: break-all; min-height: 13px; }
 
+  /* テクスチャの拡大表示。サムネイルをクリックすると開く */
+  #lightbox {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    background: rgba(8, 9, 13, 0.86); align-items: center; justify-content: center;
+  }
+  #lightbox.show { display: flex; }
+  #lbbox { max-width: min(92vw, 1100px); display: flex; flex-direction: column; gap: 8px; }
+  #lbimg {
+    max-width: 100%; max-height: 78vh; display: block; object-fit: contain;
+    /* 角丸も枠も付けない。確認用なので画像そのものを出す（縁のピクセルが読めなくなる）。
+       背景との区別は影でつける */
+    background: #000;
+    box-shadow: 0 12px 44px rgba(0, 0, 0, 0.6);
+    image-rendering: pixelated;   /* 拡大時に補間でごまかさない（ジャギが見える方が助かる） */
+  }
+  #lbbar { display: flex; align-items: center; gap: 8px; }
+  #lbname { flex: 1 1 auto; color: var(--muted); font-size: 11.5px; word-break: break-all; }
+  #lbbar .btn { flex: 0 0 auto; padding: 6px 12px; }
+
   #chunks { color: var(--muted); font-size: 11px; line-height: 1.7; font-family: ui-monospace, Menlo, monospace; }
   #chunks span { color: var(--text); }
 
@@ -178,6 +197,17 @@
 </div>
 <div id="toast"></div>
 <div id="busy"><div class="ring"></div><div class="msg" id="busymsg">読み込み中…</div></div>
+
+<div id="lightbox">
+  <div id="lbbox">
+    <img id="lbimg" alt="">
+    <div id="lbbar">
+      <span id="lbname"></span>
+      <span class="btn" id="lbdl">JPEG を保存</span>
+      <span class="btn" id="lbclose">閉じる</span>
+    </div>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -962,19 +992,18 @@ function showInfo(model) {
   const th = $("#thumbs"); th.innerHTML = "";
   $("#texsec").style.display = m.textures.length ? "" : "none";
   $("#texcount").textContent = m.textures.length ? "(" + m.textures.length + ")" : "";
-  m.textures.forEach((t, i) => {
-    const url = URL.createObjectURL(new Blob([t.jpeg], { type: "image/jpeg" }));
+  // ObjectURL はライトボックスでも使うので一覧として取っておく
+  lbTextures = m.textures.map(t => ({
+    url: URL.createObjectURL(new Blob([t.jpeg], { type: "image/jpeg" })),
+    name: t.name, bytes: t.jpeg.length,
+  }));
+  lbTextures.forEach((t, i) => {
     const d = document.createElement("div");
     d.className = "th";
-    d.innerHTML = `<img src="${url}" alt="">`;
-    d.title = t.name + "（クリックで JPEG を保存）";
-    d.onmouseenter = () => { $("#texname").textContent = `#${i}  ${t.name}  ${fmtBytes(t.jpeg.length)}`; };
-    d.onclick = () => {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = (t.name || "texture" + i).replace(/[\\/:*?"<>|]/g, "_");
-      a.click();
-    };
+    d.innerHTML = `<img src="${t.url}" alt="">`;
+    d.title = t.name + "（クリックで拡大）";
+    d.onmouseenter = () => { $("#texname").textContent = `#${i}  ${t.name}  ${fmtBytes(t.bytes)}`; };
+    d.onclick = () => showLightbox(i);
     th.appendChild(d);
   });
 
@@ -1000,6 +1029,39 @@ function setMode(mode) {
   viewer.mode = mode;
   viewer.dirty = true;
   syncButtons();
+}
+
+/* ------------------------------------------------------------------
+   テクスチャの拡大表示
+   ------------------------------------------------------------------ */
+
+let lbTextures = [], lbIndex = 0;
+
+function showLightbox(i) {
+  const t = lbTextures[i];
+  if (!t) return;
+  lbIndex = i;
+  const img = $("#lbimg");
+  img.src = t.url;
+  // 画素数はデコードできてからしか分からないので onload で載せる
+  img.onload = () => {
+    $("#lbname").textContent = `#${i}  ${t.name}  ${fmtBytes(t.bytes)}  ${img.naturalWidth}×${img.naturalHeight} px`;
+  };
+  $("#lbdl").onclick = () => {
+    const a = document.createElement("a");
+    a.href = t.url;
+    a.download = (t.name || "texture" + i).replace(/[\\/:*?"<>|]/g, "_");
+    a.click();
+  };
+  $("#lightbox").classList.add("show");
+}
+
+const closeLightbox = () => $("#lightbox").classList.remove("show");
+const lbOpen = () => $("#lightbox").classList.contains("show");
+
+function stepLightbox(d) {
+  if (!lbTextures.length) return;
+  showLightbox((lbIndex + d + lbTextures.length) % lbTextures.length);
 }
 
 function syncButtons() {
@@ -1040,6 +1102,10 @@ function installUI() {
     if (i === 0) el.classList.add("on");
   });
 
+  $("#lbclose").onclick = closeLightbox;
+  // 画像そのものをクリックした時は閉じない（拡大して見ている最中なので）
+  $("#lightbox").onclick = e => { if (e.target.id === "lightbox") closeLightbox(); };
+
   document.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("armed"); });
   document.addEventListener("dragleave", e => { if (!e.relatedTarget) drop.classList.remove("armed"); });
   document.addEventListener("drop", async e => {
@@ -1053,6 +1119,14 @@ function installUI() {
   canvas.addEventListener("click", () => { if (!viewer) drop.classList.remove("hidden"); });
 
   window.addEventListener("keydown", e => {
+    // 拡大表示中は何より先にこれをさばく（1 や P が裏で走るとややこしい）
+    if (lbOpen()) {
+      if (e.key === "Escape") closeLightbox();
+      else if (e.key === "ArrowRight") stepLightbox(1);
+      else if (e.key === "ArrowLeft") stepLightbox(-1);
+      e.preventDefault();
+      return;
+    }
     if (!viewer || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k >= "1" && k <= "5") setMode(+k - 1);
