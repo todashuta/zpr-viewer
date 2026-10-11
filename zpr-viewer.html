@@ -134,11 +134,11 @@
     font-size: 11px; letter-spacing: 0.14em; color: var(--muted);
     margin: 0 0 8px; font-weight: 600;
   }
-  #shorthelp table, #drop table { border-collapse: collapse; width: 100%; font-size: 12px; }
-  #shorthelp td, #drop td {
+  #shorthelp table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  #shorthelp td {
     padding: 3px 6px; border-top: 1px solid var(--line); vertical-align: top; text-align: left;
   }
-  #shorthelp td.k, #drop td.k { white-space: nowrap; width: 1%; color: var(--text); }
+  #shorthelp td.k { white-space: nowrap; width: 1%; color: var(--text); }
   #shorthelp .foot { color: var(--muted); font-size: 11px; margin-top: 10px; }
   #toast {
     position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 40;
@@ -170,8 +170,7 @@
   <div class="lead">ファイルをここにドラッグ＆ドロップ</div>
   <div class="sub">ZPrint / ZEdit プロジェクトファイル（頂点・三角形・頂点色・JPEG テクスチャ）<br>すべてローカルで処理します。アップロードはしません。</div>
   <button id="pick">ファイルを選ぶ</button>
-  <table id="drophints"></table>
-  <div class="hint"><kbd>?</kbd> でキー一覧 ／ すべてローカルで処理します</div>
+  <div class="hint">キー 1〜5 で表示モード ／ W でワイヤー ／ G で方眼 ／ R で視点リセット ／ P で PNG 保存</div>
   <input type="file" id="file" accept=".zpr,application/octet-stream" hidden>
 </div>
 
@@ -215,7 +214,7 @@
 </div>
 
 <div id="tips">
-  <kbd>drag</kbd> 回転 &nbsp; <kbd>shift+drag</kbd>/<kbd>右drag</kbd> 移動 &nbsp; <kbd>wheel</kbd> ズーム &nbsp; <kbd>dblclick</kbd> リセット
+  <kbd>drag</kbd> 回転 &nbsp; <kbd>shift+drag</kbd>/<kbd>右drag</kbd> 移動 &nbsp; <kbd>wheel</kbd> ズーム &nbsp; <kbd>dblclick</kbd> リセット &nbsp; <kbd>?</kbd> ショートカットを表示
 </div>
 <div id="toast"></div>
 <div id="busy"><div class="ring"></div><div class="msg" id="busymsg">読み込み中…</div></div>
@@ -1062,7 +1061,7 @@ function setMode(mode) {
 }
 
 /* ------------------------------------------------------------------
-   キー一覧（ドロップ画面と ? オーバーレイで同じ表を使い回す）
+   キー一覧（? で出すオーバーレイ）
    ------------------------------------------------------------------ */
 
 const SHORTCUTS = [
@@ -1167,7 +1166,6 @@ function installUI() {
   });
 
   $("#lbclose").onclick = closeLightbox;
-  renderKeys($("#drophints"));
   renderKeys($("#helpkeys"));
   $("#shorthelp").onclick = e => { if (e.target.id === "shorthelp") closeHelp(); };
   // 画像そのものをクリックした時は閉じない（拡大して見ている最中なので）

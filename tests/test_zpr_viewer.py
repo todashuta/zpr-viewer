@@ -161,8 +161,11 @@ def test_はてなキーでキー一覧が出て閉じる():
     h = r["help"]
     assert h["shown"], f"? キーで一覧が出ない {r}"
     assert h["rows"] >= 10, f"一覧の内容が足りない {h}"
-    # 読み込み画面の下に出す表と、? の一覧は同じ内容でなければならない
-    assert h["dropRows"] == h["rows"], f"ドロップ画面と ? 一覧の表が違う {h}"
+    # 読み込み画面は一行ヒントのまま（表にしたのは見づらいので戻した）
+    assert h["dropTable"] == 0, f"読み込み画面が表になっている {h}"
+    assert "キー 1〜5" in h["dropHint"], f"読み込み画面のヒントが消えている {h}"
+    # 3D 表示中の左下メモに ? への導線が残っていれば、一覧の存在に辿り着ける
+    assert "?" in h["tipsText"] and "ショートカット" in h["tipsText"], f"3D 画面に ? の案内がない {h}"
     assert h["closedByEsc"], f"Esc で閉じられない {h}"
     assert h["openAgain"] and h["closedByQuestion"], f"? で開け閉めできない {h}"
 

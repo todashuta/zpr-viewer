@@ -301,7 +301,9 @@
       res.help = {
         shown: document.getElementById('shorthelp').classList.contains('show'),
         rows: document.querySelectorAll('#helpkeys tr').length,
-        dropRows: document.querySelectorAll('#drophints tr').length,
+        dropTable: document.querySelectorAll('#drop table').length,
+        dropHint: document.querySelector('#drop .hint').textContent.trim(),
+        tipsText: document.getElementById('tips').textContent.replace(/\s+/g, ' ').trim(),
       };
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       res.help.closedByEsc = !document.getElementById('shorthelp').classList.contains('show');
