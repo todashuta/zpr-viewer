@@ -1,5 +1,8 @@
 # zpr-viewer
 
+**今すぐ試すなら** → [zpr-viewer.html をブラウザで開く](https://todashuta.github.io/zpr-viewer/zpr-viewer.html)
+（インストール不要。ファイル読み込みはローカルだけで、データを他所には送らない）
+
 `.zpr`（ZPrint / ZEdit Pro のプロジェクトファイル）を、**依存ゼロの単一 HTML** で開いて眺めるビューア。
 `zpr-viewer.html` をブラウザで開き、ファイルをドラッグ&ドロップするだけで、データはローカルから離れない。
 
