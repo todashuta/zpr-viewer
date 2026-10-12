@@ -193,7 +193,7 @@
       <div class="row" style="margin-top:5px">
         <div class="btn" id="twire">ワイヤー</div>
         <div class="btn" id="tgrid">グリッド</div>
-        <div class="btn" id="tcull">両面描画</div>
+        <div class="btn" id="tcull">両面表示</div>
         <div class="btn" id="tdump">チャンク</div>
       </div>
     </div>
@@ -646,7 +646,7 @@ class Viewer {
     this.mode = 0;
     this.showGrid = true;
     this.wireOverlay = true;        // 色/テクスチャ/フラットの上に線を重ねる既定値
-    this.cull = false;
+    this.twoSided = true;         // true で裏面も描く。ボタン「両面表示」と同じ向きで持つ
     // 光源の色は無彩色が既定。向きベクトルを色に流用していた頃は、
     // key の緑成分が負だったせいで全体が紫がっていた。試すときは
     // viewer.keyCol = viewer.keyDir で「向きを色にした旧表示」に戻せる
@@ -842,7 +842,10 @@ class Viewer {
     // ワイヤーを面の上に載せるため、塗りだけ深度を奥にずらす。線だけの時は不要
     const offset = this.wireOverlay && this.mode !== 2;
     if (offset) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.1, 1.1); }
-    if (this.cull) { gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); } else gl.disable(gl.CULL_FACE);
+    // 状態を cull（=剔除する）で持つと、ボタンが「両面表示」なので on/off が逆に映る。
+    // 実際に逆になっていた。UI と同じ向きの名前で持つ
+    if (this.twoSided) gl.disable(gl.CULL_FACE);
+    else { gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); }
 
     // テクスチャあり/無しのどちらでも同じ見え方にするため、無照明もテクスチャ経路に乗せる
     const wantTex = (this.mode === 1 || this.mode === 3 || this.mode === 4) && this.texGroups && this.texGroups.length;
@@ -1072,7 +1075,7 @@ const SHORTCUTS = [
   ["5", "UV"],
   ["W", "ワイヤーの重ね表示"],
   ["G", "方眼グリッド"],
-  ["C", "裏面カリング"],
+  ["C", "両面表示"],
   ["drag", "回転"],
   ["shift+drag", "移動（パン）"],
   ["右drag", "移動（パン）"],
@@ -1132,7 +1135,7 @@ function syncButtons() {
   document.querySelectorAll("#modes .btn").forEach(b => b.classList.toggle("on", +b.dataset.mode === viewer.mode));
   $("#tgrid").classList.toggle("on", viewer.showGrid);
   $("#twire").classList.toggle("on", viewer.wireOverlay);
-  $("#tcull").classList.toggle("on", viewer.cull);
+  $("#tcull").classList.toggle("on", viewer.twoSided);
 }
 
 function installUI() {
@@ -1146,7 +1149,7 @@ function installUI() {
   document.querySelectorAll("#modes .btn").forEach(b => b.onclick = () => setMode(+b.dataset.mode));
   $("#tgrid").onclick = () => { viewer.showGrid = !viewer.showGrid; viewer.dirty = true; syncButtons(); };
   $("#twire").onclick = () => { viewer.wireOverlay = !viewer.wireOverlay; viewer.dirty = true; syncButtons(); };
-  $("#tcull").onclick = () => { viewer.cull = !viewer.cull; viewer.dirty = true; syncButtons(); };
+  $("#tcull").onclick = () => { viewer.twoSided = !viewer.twoSided; viewer.dirty = true; syncButtons(); };
   $("#tdump").onclick = () => {
     const s = $("#chunksec");
     s.style.display = s.style.display === "none" ? "" : "none";
@@ -1205,7 +1208,7 @@ function installUI() {
     else if (k === "r") { resetView(); }
     else if (k === "g") { viewer.showGrid = !viewer.showGrid; viewer.dirty = true; syncButtons(); }
     else if (k === "w") { viewer.wireOverlay = !viewer.wireOverlay; viewer.dirty = true; syncButtons(); }
-    else if (k === "c") { viewer.cull = !viewer.cull; viewer.dirty = true; syncButtons(); }
+    else if (k === "c") { viewer.twoSided = !viewer.twoSided; viewer.dirty = true; syncButtons(); }
     else if (k === "p") { snapshot(); }
   });
   window.addEventListener("resize", () => { if (viewer) viewer.dirty = true; });

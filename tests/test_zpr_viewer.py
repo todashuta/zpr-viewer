@@ -156,6 +156,21 @@ def test_実アドオン出力のUV平面にテクスチャが貼れる():
     assert r["glError"] == 0, r
 
 
+def test_両面表示のオンオフが実際の描画と一致する():
+    # ボタンラベルが「両面表示」なのに on クラスが cull（=剔除する）と紐付いていて、
+    # 既定の両面描画状態でボタンが OFF に見え、クリックすると逆のことをしていた
+    # （issue #2）。ボタンの状態と実描画の両方から押さえる
+    seen = {}
+    for pitch in ("0.24", "-0.24"):        # 面 1 枚を表と裏から見る
+        cull = open_sample("plane_uv.zpr", mode=3, case="cull", pitch=pitch)["cull"]
+        for row in cull:
+            assert row["buttonOn"] == row["twoSided"], f"ボタンの状態が実態と逆 {row} pitch={pitch}"
+            seen[(pitch, row["twoSided"])] = coverage(row, "coverage")
+    assert seen[("0.24", True)] > 10 and seen[("0.24", False)] > 10, f"表から見て平面が見えない {seen}"
+    assert seen[("-0.24", True)] > 10, f"両面 ON ののに裏面が消えている {seen}"
+    assert seen[("-0.24", False)] < 0.1, f"両面 OFF ののに裏面が描かれている {seen}"
+
+
 def test_はてなキーでキー一覧が出て閉じる():
     r = open_sample("cube_color.zpr", mode=0, case="help")
     h = r["help"]

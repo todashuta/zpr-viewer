@@ -14,6 +14,8 @@
    &case=lightbox      : テクスチャの拡大表示が開くか、閉じられるか
    &case=pan           : pan() の移動方向をカメラ軸で検証する
    &case=reset         : 視点リセット後のカメラ距離を読む
+   &case=cull          : 両面表示 ON/OFF を表と裏の両方から測る（面 1 枚用）
+   &yaw= / &pitch= / &dist= : カメラ姿势を直接指定して測る
    &wirecolor=255,0,0  : (case=wire) 線色を差し替えて描画の有無を切り分ける
    &nowrite=1          : (case=wire) 面塗りだけを消して線単体で測る
    &lightcol=dir       : (case=wire) 照明色を旧表示（向きベクトルを色に流用）に戻す
@@ -232,6 +234,29 @@
       res.wireBuf = !!viewer.gpu.wire;
       res.coverageNoGrid = after.coverage;   // 方眼を消したので、これはメッシュ自体の被面積
       res.avgNoGrid = after.avg;             // 方眼・ワイヤー抜きの平均色（照明の色を見るのに使う）
+    }
+
+    // --- 「両面表示」のオンオフが実際の描画に効いているか ---
+    // ボタンラベルが「両面表示」なのに on クラスが cull（=剔除する）と紐付いていて、
+    // ラベルと実描画が逆になっていた。面 1 枚を表/裏から見て、オフのとき裏だけが
+    // 消えることと、ボタンの on クラスが実際の状態と揃っていることで押さえる
+    if (q.get('case') === 'cull') {
+      viewer.showGrid = false;
+      viewer.wireOverlay = false;
+      viewer.mode = 3;                                  // 照明の影響を消す
+      if (q.get('pitch') !== null) viewer.cam.pitch = +q.get('pitch');
+      if (q.get('yaw') !== null) viewer.cam.yaw = +q.get('yaw');
+      if (q.get('dist') !== null) viewer.cam.dist = +q.get('dist');
+      const out = [];
+      for (const ts of [true, false]) {
+        viewer.twoSided = ts;
+        syncButtons();
+        const buttonOn = document.querySelector('#tcull').classList.contains('on');
+        for (let i = 0; i < 4; i++) viewer.draw();
+        px = read();
+        out.push({ twoSided: ts, buttonOn, ...stats() });
+      }
+      res.cull = out;
     }
 
     // --- 視点リセットの距離 ---
