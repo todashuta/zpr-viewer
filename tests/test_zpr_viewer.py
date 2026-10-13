@@ -286,16 +286,31 @@ def test_三角形の頂点索引は頂点バッファの範囲内に収まる()
         assert b["wireMax"] < b["posVerts"], f"{name}: ワイヤー索引が範囲外 {b}"
 
 
+def test_ワイヤーは初期状態ではオフ():
+    # 既定で線が載っていると、面の色とテクスチャのどちらを見ているか判別しづらい。
+    # プリセットを何も渡さない = 立ち上げた直後の状態を見る
+    r = open_sample("cube_color.zpr", mode=0, case="wire")
+    assert r["wireOverlay"] is False, f"既定でワイヤーが重ねられている {r['wireOverlay']}"
+    assert r["twireOn"] is False, f"ボタンのオン表示が実状態と逆 {r['twireOn']}"
+    assert r["wirePx"] < 100, f"既定で線が描かれている {r['wirePx']}px"
+    assert r["wireBuf"] is False, f"使わないワイヤーのバッファを作っている {r}"
+    # 既定オフでも W キーで載せられる（トグルが死んでいないこと）
+    k = open_sample("cube_color.zpr", mode=0, case="wire", wkey="1")
+    assert k["wireOverlay"] is True and k["twireOn"] is True, f"W キーで切り替わらない {k}"
+    assert k["wirePx"] > 200, f"W キーで線が載らない {k['wirePx']}px"
+
+
 def test_色モードの上にワイヤーが重なる():
     off = open_sample("cube_color.zpr", mode=0, case="wire", wire="0")
-    on = open_sample("cube_color.zpr", mode=0, case="wire")
+    on = open_sample("cube_color.zpr", mode=0, case="wire", wire="1")
     assert off["wirePx"] < 100, f"ワイヤー重ねを消したのに線が残っている {off}"
     assert on["wirePx"] > 200, f"色モードに線が重ならない {on}"
+    assert on["twireOn"] is True, f"ボタン表示が実状態と違う {on}"
     assert coverage(on, "coverageNoGrid") > 0.5, f"線を重ねると面が見えなくなる {on}"
 
 
 def test_テクスチャの上にワイヤーが重なる():
-    on = open_sample("plane_uv.zpr", mode=1, case="wire")
+    on = open_sample("plane_uv.zpr", mode=1, case="wire", wire="1")
     assert on["wirePx"] > 200, f"テクスチャ面に線が重ならない {on}"
     assert coverage(on, "coverageNoGrid") > 0.5, f"線を重ねるとテクスチャが見えなくなる {on}"
 

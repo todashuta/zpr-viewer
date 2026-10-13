@@ -8,7 +8,9 @@
    &mode=0..4          : 表示モード
    &case=uvcorners     : テクスチャ 4 隅の色と UV 値を読み取って貼り向きを検証する
    &case=wire          : 方眼を消してワイヤー線のピクセル数を数える
-   &wire=0             : (case=wire) ワイヤー重ねをオフにしてから測る
+   &wire=0 / &wire=1   : (case=wire) ワイヤー重ねをオフ／オンにしてから測る。
+                         既定値に依存して測りたい側は必ずどちらかを渡す
+   &wkey=1             : (case=wire) W キーを発火させてから測る（既定オフでも重ねられるか）
    &case=buffers       : 頂点バッファ規模と索引の最大値、単独 draw のエラー码を読む
    &case=help          : ? キーでキー一覧が出て閉じられるか
    &case=lightbox      : テクスチャの拡大表示が開くか、閉じられるか
@@ -33,13 +35,15 @@
     const target = q.get('f') || 'tests/samples/blender_out.zpr';   // ?f= 無しで開いた時の既定
     const mode = +(q.get('mode') || 0);
     const buf = await (await fetch(target)).arrayBuffer();
-    if (q.get('wire') === '0') {
+    if (q.get('wire') === '0' || q.get('wire') === '1') {
       // openFile は既存の viewer を使い回すので、先に作ってから既定値を落としておく。
       // こうしないと openFile 中の初回描画でワイヤーが構築されてしまう
       viewer = new Viewer(canvas);
       installCamera(viewer);
       startLoop(viewer);
-      viewer.wireOverlay = false;
+      if (q.get('wire') === '0') viewer.wireOverlay = false;
+      // 既定値に依存して測りたい側は wire=1 で明示する。既定が動いてもテストが壊れない
+      if (q.get('wire') === '1') viewer.wireOverlay = true;
     }
     await openFile(new File([buf], target));
     if (!viewer || !viewer.model) {
@@ -47,6 +51,7 @@
       return;
     }
     if (q.get('wire') === '0') viewer.wireOverlay = false;   // 初回描画前に落として、遅延構築されるか確かめる
+    if (q.get('wire') === '1') viewer.wireOverlay = true;
     if (mode) setMode(mode);
     for (let i = 0; i < 10; i++) { await new Promise(r => setTimeout(r, 40)); viewer.draw(); }
 
@@ -75,6 +80,8 @@
       texGroups: viewer.texGroups.length, decodedTex: [...viewer.texCache.keys()],
       texNames: viewer.model.textures.map(t => t.name),
       grid: !!viewer.gridBuf, wireBuf: !!viewer.gpu.wire,
+      wireOverlay: viewer.wireOverlay,
+      twireOn: document.getElementById('twire').classList.contains('on'),
       plainFaces: viewer.model.idxPlain.length / 3,
       glError: gl.getError(), ...stats(),
     };
@@ -207,6 +214,10 @@
     if (q.get('case') === 'wire') {
       viewer.showGrid = false;
       if (q.get('wire') === '0') viewer.wireOverlay = false;   // 重ねていない状態も測れるようにする
+      if (q.get('wire') === '1') viewer.wireOverlay = true;    // 既定値に依存せず重ねる
+      if (q.get('wkey') === '1') {   // W キーでの切り替え。既定オフでも機能が生きているか
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }));
+      }
       if (q.get('lightcol') === 'dir') {   // 旧表示（光源の向きを色に流用したもの）との比較用
         viewer.draw();
         viewer.keyCol = viewer.keyDir; viewer.fillCol = viewer.fillDir;
@@ -228,6 +239,9 @@
       }
       res.ink = ink;
       res.wirePx = n;
+      // res はこのケースより前に作られるので、キーで切り替えた後は読み直さない限り古い
+      res.wireOverlay = viewer.wireOverlay;
+      res.twireOn = document.getElementById('twire').classList.contains('on');
       res.grid = false;
       // stats() は先に取ったままだから、方眼・ワイヤーを消した後で読み直す
       const after = stats();
