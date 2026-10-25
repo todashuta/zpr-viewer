@@ -98,6 +98,24 @@ ZPR を書き出す Blender アドオンはこのリポジトリには含めな�
 `zpr-viewer.test.html`（生成物・コミット不要）を作って、それに検証させる。ブラウザも同じ流儀で、
 `CHROME=/path/to/Chrome` で実行ファイルを差し替えられる。
 
+Chromium でも同じように回せる（snap 版 Chromium 156 で全件 PASS を確認）。
+ただし systemd が動いていない環境（コンテナ内など。`/proc/1/comm` が `systemd` でない場合）では、
+起動時の transient scope 作成に失敗し、その道連れで crashpad と FD ownership チェックが落ちる。
+`DBUS_SESSION_BUS_ADDRESS=disabled:` を渡すと DBus を触らずに起動して通る。
+プロファイルと一時ファイルの書き込み先も要るので、`HOME` / `TMPDIR` を書き込み可能な場所に向けておく:
+
+```bash
+P="$PWD"; mkdir -p .home .tmp/run
+DBUS_SESSION_BUS_ADDRESS=disabled: \
+  HOME="$P/.home" XDG_CONFIG_HOME="$P/.home/.config" XDG_CACHE_HOME="$P/.home/.cache" \
+  XDG_RUNTIME_DIR="$P/.tmp/run" TMPDIR="$P/.tmp" \
+  CHROME=/snap/chromium/current/usr/lib/chromium-browser/chrome \
+  python3 tests/test_zpr_viewer.py
+```
+
+`.home/` と `.tmp/` は実行後に消してよい。`--single-process` なら FD ownership 違反は避けられるが、
+WebGL は動くものの `file://` の fetch で落ちるので使わない。
+
 カバーしている範囲: 頂点/三角形/色の規模、白塗り、JPEG デコード、テクスチャの貼り向き（4 隅の色と UV 値の両方）、
 画像共有時のデコード重複、面 UV の無い面の描画残し、ワイヤーの遅延構築と**実際に線が描かれていること**、
 色モードとテクスチャモードへのワイヤーの重なり、ワイヤーが**初期状態でオフ**なこと（トグルの
